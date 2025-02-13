@@ -1,0 +1,322 @@
+/*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Copyright (C) 2011-2018 OpenFOAM Foundation
+     \\/     M anipulation  |
+-------------------------------------------------------------------------------
+License
+    This file is part of OpenFOAM.
+
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+
+Application
+    magnificationLensSolver
+
+Description
+    Solver for a system of 2 compressible fluid phases with one phase
+    dispersed with ability of magnifying the discrete particles in a
+    specified zone. This solver enables two-way coupling between TFM
+    and CFD-DEM through mass and momentum coupling or momentum coupling
+    alone. Also, it is possible to perform one-way coupling which in this
+    case information is not transferred from CFD-DEM back to TFM.
+
+\*---------------------------------------------------------------------------*/
+
+#include "fvCFD.H"
+#include "twoPhaseSystem.H"
+#include "PhaseCompressibleTurbulenceModel.H"
+#include "pimpleControl.H"
+#include "fvOptions.H"
+#include "fixedValueFvsPatchFields.H"
+#include "cellSet.H"
+#include "faceSet.H"
+#include "scalarIOList.H"
+#include "scalarIOField.H"
+
+//Cfdemcloud
+#include "singlePhaseTransportModel.H"
+#include "turbulentTransportModel.H"
+#include "pisoControl.H"
+#include "cfdemCloud.H"
+#include "implicitCouple.H"
+#include "clockModel.H"
+#include "smoothingModel.H"
+#include "forceModel.H"
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+int main(int argc, char *argv[])
+{
+    #include "postProcess.H"
+
+    #include "setRootCaseLists.H"
+    #include "createTime.H"
+    #include "createMesh.H"
+    #include "createControl.H"
+    #include "createFields.H"
+    #include "createFieldRefs.H"
+    #include "createPatchFacesFields.H"
+    #include "createLocalCellSetIDsFields.H"
+    #include "createTimeControls.H"
+    #include "CourantNos.H"
+    #include "setInitialDeltaT.H"
+    //switch field
+    #include "createSwitchUEqn.H"
+
+   //CFD-DEM fields
+   #include "createDEMFields.H"
+    Switch faceMomentum
+    (
+        pimple.dict().lookupOrDefault<Switch>("faceMomentum", false)
+    );
+
+    Switch implicitPhasePressure
+    (
+        mesh.solverDict(alpha1.name()).lookupOrDefault<Switch>
+        (
+            "implicitPhasePressure", false
+        )
+    );
+
+    // switch for periodic box simulations
+    // handling of p_rgh in case of periodic boxes is wrong,
+    // thus, we introduced a second gravity term in the momentum equations
+    // in case of periodic box simulations the gravity in the
+    // "constant/g" dictionary has to be set to 0, to remove it from the
+    // pressure equation!
+    Switch periodicBox
+    (
+        pimple.dict().lookupOrDefault<Switch>("periodicBox", false)
+    );
+
+    if (!periodicBox) gN *= 0.;
+
+    Switch energyEqn
+    (
+        pimple.dict().lookupOrDefault<Switch>("energyEqn", false)
+    );
+
+    // Magnification lens dictionary
+    const word magnificationLensType = magnificationLensDict.lookup("simulationType");   
+    const bool magLensSwitch = (magnificationLensType == "magnificationLens");    
+    const word magnificationLensTypeName = magnificationLensDict.subOrEmptyDict("magnificationLens").lookupOrDefault<word>("magnificationLensModel", "");
+    // One-way coupling between TFM and CFD-DEM switch
+    const bool oneWayMagLens = (magnificationLensTypeName == "oneWayCoupling");
+    // Two-way coupling between TFM and CFD-DEM using momentum coupling switch
+    const bool twoWayMagLensMC = (magnificationLensTypeName == "momentumCoupling");
+    // Two-way coupling between TFM and CFD-DEM using mass and momentum coupling switch
+    const bool twoWayMagLensMMC = (magnificationLensTypeName == "massMomentumCoupling");
+    // Time-step at which the two-way coupling between TFM and CFD-DEM occurs
+    const scalar magLensStart = magnificationLensDict.lookupOrDefault<scalar>("startTimeStep", 1);
+    const scalar solidsVolFracThresh = magnificationLensDict.lookupOrDefault<scalar>("solidsVolFracThresh", 0.0);
+    const bool magLensPeriodicBoxCal = magnificationLensDict.lookupOrDefault<Switch>("periodicCalculations", false);
+    Info << "seleting magnification lens model type: " << magnificationLensTypeName << endl;
+    Info << "seleting magnification lens start time-step: " << magLensStart << endl;
+    Info << "seleting magnification lens momentum coupling discrete particle volume fraction threshold: " << solidsVolFracThresh << endl;
+    //check if SATFM is used
+    const dictionary& turbulencephase1 = mesh.lookupObject<IOdictionary>
+    (
+       "turbulenceProperties." +  phase1.name()
+    );
+    const word turbulence1Groupname = turbulencephase1.lookup("simulationType");
+    const word turbulence1name = turbulencephase1.subOrEmptyDict("RAS").lookupOrDefault<word>("RASModel", "");
+
+    const dictionary& turbulencephase2 = mesh.lookupObject<IOdictionary>
+    (
+       "turbulenceProperties." +  phase2.name()
+    );
+    const word turbulence2Groupname = turbulencephase2.lookup("simulationType");
+    const word turbulence2name = turbulencephase2.subOrEmptyDict("RAS").lookupOrDefault<word>("RASModel", "");
+
+    const bool SATFM = (turbulence1Groupname == "RAS" && turbulence1name == "SATFMdispersed" && turbulence2Groupname == "RAS" && turbulence2name == "SATFMcontinuous");
+
+    #include "pUf/createDDtU.H"
+    #include "pU/createDDtU.H"
+    
+    // create cfdemCloud
+    cfdemCloud particleCloud(mesh);
+    #include "checkModelType.H"
+
+    // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+    Info<< "\nStarting time loop\n" << endl;
+
+    while (runTime.run())
+    {
+        #include "readTimeControls.H"
+        #include "CourantNos.H"
+        #include "setDeltaT.H"
+
+
+
+        runTime++;
+        Info<< "Time = " << runTime.timeName() << nl << endl;
+
+
+        // --- Pressure-velocity PIMPLE corrector loop
+        while (pimple.loop())
+        {
+            fluid.solve();
+            fluid.correct();
+
+            #include "contErrs.H"
+
+            if (faceMomentum)
+            {
+                #include "pUf/UEqns.H"
+                if (energyEqn) {
+                    if (SATFM)
+                    {
+                        #include "EEqnsSATFM.H"
+                    }
+                    else
+                    {
+                        #include "EEqns.H"
+                    }
+                }
+                #include "pUf/pEqn.H"
+                #include "pUf/DDtU.H"
+            }
+            else
+            {
+                #include "pU/UEqns.H"
+                if (energyEqn) {
+                    if (SATFM)
+                    {
+                        #include "EEqnsSATFM.H"
+                    }
+                    else
+                    {
+                        #include "EEqns.H"
+                    }
+                }
+                #include "pU/pEqn.H"
+                #include "pU/DDtU.H"
+            }
+
+            if (pimple.turbCorr())
+            {
+                fluid.correctTurbulence();
+            }
+        }
+        //--------------------------coupling with CFD-DEM-------------------------------//
+        particleCloud.clockM().start(1,"Global");
+        particleCloud.clockM().start(2,"Coupling");
+        particleCloud.evolve(voidfraction,Us,U2);
+        particleCloud.smoothingM().smoothen(particleCloud.forceM(0).impParticleForces());
+        Info << "update Ksl.internalField()" << endl;
+        Ksl = particleCloud.momCoupleM(0).impMomSource();      
+        Ksl.correctBoundaryConditions();
+        particleCloud.clockM().stop("Coupling");
+        particleCloud.clockM().stop("Global");
+
+        ///////////---------------POST_PROCESS-----------//////////////////////////
+        //DML region postprocessing in periodic box simulations
+        if (magLensPeriodicBoxCal) {
+            #include "DMLRegionCalculationsCFDDEM.H"
+            #include "DMLRegionCalculationsTFM.H"
+        }
+
+        dimensionedScalar volume = fvc::domainIntegrate(unity);
+        Info<< "particle_ENSTROPHY: "
+            << (
+                    fvc::domainIntegrate( 0.5*magSqr(fvc::curl(U1)))
+                   /volume
+                ).value()
+            << endl;
+
+        Info<< "air_ENSTROPHY: "
+            << (
+                   fvc::domainIntegrate( 0.5*magSqr(fvc::curl(U2)))
+                  /volume
+               ).value()
+            << endl;
+        if (periodicBox) {
+            Info<< "slip_velocity: "
+                << mag((
+                        fvc::domainIntegrate(alpha2*(U2&gN))
+                       /fvc::domainIntegrate(alpha2*mag(gN))
+                     )
+                   - (
+                        fvc::domainIntegrate(alpha1*(U1&gN))
+                       /fvc::domainIntegrate(alpha1*mag(gN))
+                     )).value()
+                << endl;
+        }
+
+        Info<< "total momentum: "
+            << mag(fvc::domainIntegrate(alpha1*rho1*U1 + alpha2*rho2*U2).value())
+            << endl;
+
+        Info<< "total solids mass: "
+            << mag(fvc::domainIntegrate(alpha1*rho1).value())
+            << endl;
+
+        Info<< "mean gas density: "
+            << fvc::domainIntegrate(alpha2*rho2).value()
+              /fvc::domainIntegrate(alpha2).value()
+            << endl;
+        
+        dimensionedVector alpha1U1 = fvc::domainIntegrate(alpha1*(U1))/fvc::domainIntegrate(alpha1);
+        dimensionedVector alpha2U2 = fvc::domainIntegrate(alpha2*(U2))/fvc::domainIntegrate(alpha2);
+        dimensionedScalar alpha1M  = fvc::domainIntegrate(alpha1)/volume;
+        dimensionedScalar alpha2M  = scalar(1.0) - alpha1M;
+        
+        Info<< "TKE gas: "
+            << 0.5
+              *(
+                  fvc::domainIntegrate(alpha2*(U2&U2)).value()
+                 /fvc::domainIntegrate(alpha2).value()
+               )
+             - 0.5
+              *(
+                  alpha2U2.value()
+                 &alpha2U2.value()
+               )
+            << endl;
+
+        Info<< "TKE solid: "
+            << 0.5
+              *(
+                  fvc::domainIntegrate(alpha1*(U1&U1)).value()
+                 /fvc::domainIntegrate(alpha1).value()
+               )
+             - 0.5
+              *(
+                  alpha1U1.value()
+                 &alpha1U1.value()
+               )
+            << endl;
+
+        Info<< "PhiP2: "
+            << fvc::domainIntegrate(alpha1*alpha1).value()
+              /fvc::domainIntegrate(unity).value()
+             - alpha1M.value()*alpha1M.value()
+            << endl;
+
+        #include "write.H"
+
+        Info<< "ExecutionTime = "
+            << runTime.elapsedCpuTime()
+            << " s\n\n" << endl;
+    }
+
+    Info<< "End\n" << endl;
+
+    return 0;
+}
+
+
+// ************************************************************************* //
