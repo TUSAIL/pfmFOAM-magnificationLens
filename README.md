@@ -8,8 +8,8 @@ OpenFOAM based developments made by the [Department of Particulate Flow Modellin
 > This offering is not approved or endorsed by OpenCFD Limited, producer and distributor of the OpenFOAM software via www.openfoam.com, and owner of the OPENFOAM®  and OpenCFD®  trade marks.
 
 ## Features
-This solver is capable of coupling TFM with CFD-DEM in a specified region. It is possible to choose between one-way coupling and two-way coupling between TFM and CFD-DEM.
-In case of using two-way coupling methodology user can choose between mass and momentum coupling or solely momentum coupling between TFM and CFD-DEM. The TFM solver is 
+This solver is capable of coupling Two-Fluid Model with CFD-DEM in a specified region. It is possible to choose between one-way coupling and two-way coupling between Two-Fluid Model and CFD-DEM.
+In case of using two-way coupling methodology user can choose between mass and momentum coupling or solely momentum coupling between Two-Fluid Model and CFD-DEM. The Two-Fluid Model solver is 
 based on "twoPhaseEulerTurbFoam" and the CFD-DEM simulations are based on CFDEMcoupling and LIGGGHTS developed by Department of Particulate Flow Modelling at Johannes Kepler University in Linz, Austria.
 
 ## How to cite
@@ -35,6 +35,11 @@ wmake
 After compiling the utilities necessary to run magnification solver cases, direct to magnification lens solver folder and compile the solver,
 ```bash
 cd pfmFOAM/pfm/applications/solvers/multiphase/MagnificationLensSolver
+./Allwmake 
+```
+In addition, it is also possible to compile twoPhaseEulerTurbFoam solver which can be used to simulation Two-Fluid Model cases with,
+```bash
+cd pfmFOAM/pfm/applications/solvers/multiphase/twoPhaseEulerTurbFoam
 ./Allwmake 
 ```
 
