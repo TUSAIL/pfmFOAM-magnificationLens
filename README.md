@@ -44,7 +44,7 @@ cd pfmFOAM/pfm/applications/solvers/multiphase/twoPhaseEulerTurbFoam
 ```
 
 ## Tutorial
-The tutorials related to the simulation cases in Esgandari et al. (2024) can be found in pfmFOAM/pfm/tutorials/multiphase/MagnificationLensSolver.
+The tutorials related to the discrete magnification lens cases in Esgandari et al. (2024) can be found in pfmFOAM/pfm/tutorials/multiphase/MagnificationLensSolver and the Two-Fluid Model cases can be found in tutorials/multiphase/twoPhaseEulerTurbFoam/KT/DiscreteMagnificationLensPaperCases.
 
 
 ## License
