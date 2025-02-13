@@ -1,0 +1,107 @@
+################################################################################
+# brief: magnification lens DEM side script for particle jet simulations       #
+#                                                                              #
+# Cf. Esgandari et al. (2024), Discrete magnification lens model:              #
+# A new hybrid multi-scale modelling method for fluid-particle systems,        #
+# pow. tech.                                                                   #
+#                                                                              #
+# authors: Behrad Esgandari                                                    #
+# date: Jan 2025                                                               #
+# copyright: 2025- JKU Linz                                                    #
+################################################################################
+
+log             ../DEM/log.liggghts
+thermo_log      ../DEM/post/thermo.txt
+
+# define the attributes associated with the particles,
+# 'granular' (or 'sphere') style uses diameter, mass and angular velocity
+atom_style      granular
+
+# use an array to map particle IDs to local storage index,
+atom_modify     map array
+
+# set simulation domain to be fixed in x y z
+boundary        f p f
+
+# save communication by turning off Newton's 3rd law for pairwise interaction,
+# note: this setting only influences communication between procs, Newton's
+# 3rd law is still used for contact force calculations
+newton          off
+
+# use a single value for ghost particle cutoff distance and
+# enable velocity to be communicated with ghost particles
+communicate     single vel yes
+
+# set unit system to SI
+units           si
+
+processors      1 1 4
+
+# define the magnification lens region used as simulation domain (min/max X, min/max Y, min/max Z)
+region          domain block 0.0 0.09 0.0 0.09 0.02 0.0811 units box
+
+# create the simulation domain and 1 material types (with friction/frictionless)
+create_box      2 domain
+
+# specify the skin distance for neighbor list generation
+neighbor        0.0003 bin
+neigh_modify    delay 0
+
+# define the material properties required for granular pair styles
+fix m1 all property/global youngsModulus peratomtype 5e7 5e7
+fix m2 all property/global poissonsRatio peratomtype 0.3 0.3
+fix m3 all property/global coefficientRestitution peratomtypepair 2 0.8 0.99 0.99 0.99
+fix m4 all property/global coefficientFriction peratomtypepair 2 0.05 0.05 0.05 0.05
+
+# specify contact model to use
+pair_style  gran model hertz tangential incremental_history 
+pair_coeff  * *
+
+# set the time step
+timestep    0.0000001
+
+# set diameter and density
+fix pts1 all particletemplate/sphere 98531 atom_type 1 volume_limit 1e-14 density constant 1000 radius constant 0.001
+fix pdd1 all particledistribution/discrete 746325 1 pts1 1.0
+# apply gravity
+fix gravity all gravity 0.0 vector 0.0 0.0 -1.0
+
+# cfd coupling
+fix cfd  all couple/cfd couple_every 50 mpi
+fix cfd2 all couple/cfd/force/implicit
+# data transfer coupling
+fix cfd3 all couple/cfd/face/tfm n_patches 1 n_faceids 30
+fix cfd4 all couple/cfd/cell/tfm n_patches 1 n_cells 30 
+
+# mass flow of the particle phase from TFM
+fix massflux all massflow/mesh/face/tfm couple_every 50 n_MagnificationLensFaces 30 density 1000 radius 0.001 insertion_frequency 1
+
+# insertion region
+region hexRegion1 mesh/hex file ../DEM/meshes/InsertionBottom.vtk scale 1. move 0. 0. 0.0 rotate 0. 0. 0. cell_data yes units box
+
+# insertion 
+fix insMagLens1 all insert/pack/face/tfm seed 7331 random_distribute exact maxattempt 100 insert_every 50 start 102&
+    overlapcheck yes all_in yes region hexRegion1 ntry_mc 1500 massflow_face massflux start_index 0 end_index 29 n_MagnificationLensFaces 30
+
+# use constant NVE integration to update position, velocity and angular velocity
+fix         integr all nve/sphere
+
+thermo_style    custom step atoms
+
+# set frequency of output
+thermo          1000
+
+# ignore particles leaving the simulation domain,
+# do not normalize thermodynamic output values by the number of atoms
+thermo_modify   lost ignore norm no
+
+# set dynamic to 'no' as number of particles does not change
+compute_modify  thermo_temp dynamic no
+
+# output particle properties (same frequency as CFD output)
+dump dmp all custom/vtk 100000 ../DEM/post/liggghts_run_*.vtk id type x y z vx vy vz &
+     fx fy fz omegax omegay omegaz radius
+
+run 1
+
+

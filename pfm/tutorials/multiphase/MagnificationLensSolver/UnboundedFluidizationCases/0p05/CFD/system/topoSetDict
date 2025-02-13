@@ -1,0 +1,164 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  6
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+actions
+(
+    // create cell set to average the results
+    {
+        name    magLensCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0041 -0.0041 -0.003)(0.0041 0.0041 0.003);
+        }
+    }
+    
+   // create top in setion cell set to deactivate the fluid forces
+    {
+        name    topInsertionCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0041 -0.0041 0.004)(0.0041 0.0041 0.005);
+        }
+    }
+    
+   // create top controller cell set to measure properties
+    {
+        name    topControllerCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0041 -0.0041 0.002999)(0.0041 0.0041 0.0041);
+        }
+    }    
+
+   // create Bottom in setion cell set to deactivate the fluid forces
+    {
+        name    bottomInsertionCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0041 -0.0041 -0.005)(0.0041 0.0041 -0.004);
+        }
+    }
+    
+   // create bottom controller cell set to measure properties
+    {
+        name    bottomControllerCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0041 -0.0041 -0.004)(0.0041 0.0041 -0.002999);
+        }
+    }  
+    
+    //create cell zone
+    {
+        name    magLensCellZone;
+        type    cellZoneSet;
+        action  new;
+        source  setToCellZone;
+        sourceInfo
+        {
+            set magLensCellSet;
+        }
+    }
+    
+    
+    //create cell zone
+    {
+        name    magLensCellZone;
+        type    cellZoneSet;
+        action  new;
+        source  setToCellZone;
+        sourceInfo
+        {
+            set magLensCellSet;
+        }
+    }
+
+
+    //create faceset from magLens_top
+    {
+        name    magLensTopFaceSet;
+        type    faceSet;
+        action  new;
+        source  patchToFace;
+        sourceInfo
+        {
+	     name   "magLens_top_master";
+	}
+    }
+    
+
+    {
+        name    magLensBottomFaceSet;
+        type    faceSet;
+        action  new;
+        source  patchToFace;
+        sourceInfo
+        {
+	     name   "magLens_bottom_master";
+	}
+    }   
+    
+     
+     
+/*
+    // create face set from cell set
+    {
+        name    magLensFaceSet;
+        type    faceSet;
+        action  new;
+        source  cellToFace;
+        sourceInfo
+        {
+            set     magLensCellSet;
+            option  all;
+        }
+    }
+  
+
+    // Create faceZone from face set
+    {
+        name    magLensFaceZone;
+        type    faceZoneSet;
+        action  new;
+        source  setToFaceZone;
+        sourceInfo
+        {
+            faceSet magLensFaceSet;
+        }
+    }
+*/
+
+
+);
+
+
+// ************************************************************************* //

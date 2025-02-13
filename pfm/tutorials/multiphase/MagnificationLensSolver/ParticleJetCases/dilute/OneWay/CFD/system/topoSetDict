@@ -1,0 +1,120 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     | Website:  https://openfoam.org
+    \\  /    A nd           | Version:  6
+     \\/     M anipulation  |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    object      topoSetDict;
+}
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+actions
+(
+
+    // create magnification lens cell set 
+    {
+        name    magLensCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0001 -0.0001 0.0399)(0.091 0.091 0.0779);
+        }
+    }
+    
+     {
+        name    magLensBottomFaceSet;
+        type    faceSet;
+        action  new;
+        source  patchToFace;
+        sourceInfo
+        {
+	     name   "magLens_bottom_master";
+	}
+    } 
+    
+   // create Bottom in setion cell set to deactivate the fluid forces
+    {
+        name    bottomInsertionCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0001 -0.0001 0.02099)(0.091 0.091 0.0271);
+        }
+    }
+
+
+   // create bottom controller cell set to control particle velocity
+    {
+        name    bottomControllerCellSet;
+        type    cellSet;
+        action  new;
+        source  boxToCell;
+        sourceInfo
+        {
+            box (-0.0001 -0.0001 0.0241)(0.091 0.091 0.0331);
+        }
+    }       
+    
+    //create cell zone
+    {
+        name    magLensCellZone;
+        type    cellZoneSet;
+        action  new;
+        source  setToCellZone;
+        sourceInfo
+        {
+            set magLensCellSet;
+        }
+    }
+    
+    
+    //create cell zone
+    {
+        name    magLensCellZone;
+        type    cellZoneSet;
+        action  new;
+        source  setToCellZone;
+        sourceInfo
+        {
+            set magLensCellSet;
+        }
+    }
+    
+    {
+        name    inletFaceSetLeft;           //name of the new set to be created
+        type    faceSet;                  // is it a cellSet or faceSet?
+        action  new;                        // is it new or appending?
+        source  boxToFace;             // extracting faces from the defined box 
+        sourceInfo                          // box details 
+        {
+             box (-0.001 -0.001 -0.001)(0.000 0.091 0.0181); //need to select the outer layer cells
+        }
+    }
+     
+     
+    {
+        name    inletFaceSetRight;           //name of the new set to be created
+        type    faceSet;                  // is it a cellSet or faceSet?
+        action  new;                        // is it new or appending?
+        source  boxToFace;             // extracting faces from the defined box 
+        sourceInfo                          // box details 
+        {
+             box (0.0899 -0.001 -0.001)(0.092 0.091 0.0181); //need to select the outer layer cells
+        }
+    }    
+     
+);
+
+
+// ************************************************************************* //

@@ -1,0 +1,41 @@
+#!/bin/bash
+#------------------------------------------------------------------------------
+# allrun script for periodic box simulation
+# run maginifcation lens solver
+#------------------------------------------------------------------------------
+
+#- source CFDEM env vars
+. ~/.bashrc
+
+#------------------------------------------------------------------------------
+#- define variables
+casePath="$(dirname "$(readlink -f ${BASH_SOURCE[0]})")"
+source $casePath/functions.sh # this is important to load functions from the file in the case
+logpath=$casePath
+headerText="run_parallel_MagLensSolver"
+logfileName="log_$headerText"
+solverName="MagLensSolver"
+nrProcs="32"
+machineFileName="none"   # yourMachinefileName | none
+debugMode="off"          # on | off| strict
+runCleanUp="false"
+#------------------------------------------------------------------------------
+
+#- call function to run a parallel CFD-DEM case
+parCFDDEMrun $logpath $logfileName $casePath $headerText $solverName $nrProcs $machineFileName $debugMode
+
+if [ $runCleanUp == "true" ]
+    then
+        #- clean up case
+        echo "deleting data at: $casePath :\n"
+        source $WM_PROJECT_DIR/bin/tools/CleanFunctions
+        cd $casePath/CFD
+        cleanCase
+        rm $casePath/DEM/post/*.*
+        touch $casePath/DEM/post/.gitignore
+        rm $casePath/DEM/post/restart/*.*
+        touch $casePath/DEM/post/restart/.gitignore
+fi
+
+echo "done"
+
