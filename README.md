@@ -16,7 +16,7 @@ based on "twoPhaseEulerTurbFoam" and the CFD-DEM simulations are based on CFDEMc
 Behrad Esgandari, Daniel Queteschiner, Stefan Pirker, and Simon Schneiderbauer. "Discrete magnification lens model: A new hybrid multi-scale modelling method for fluid-particle systems." Powder Technology 445 (2024): 120094.
 
 ## Installation
-The OpenFOAM 6, CFDEMcoupling compatible with this solver [(CFDEMcoupling-magnificationLens)](https://github.com/behradesg/CFDEMcoupling-magnificationLens) and LIGGGHTS_ML should already be compiled in your system. Then, download the solver or clone it using git clone. Change the cloned folder name to pfmFOAM. Load CFDEMcoupling_ML bashrc in a terminal and in the same terminal type
+The OpenFOAM 6, CFDEMcoupling compatible with this solver [(CFDEMcoupling-magnificationLens)](https://github.com/behradesg/CFDEMcoupling-magnificationLens) and LIGGGHTS compatible with this solver [(LIGGGHTS-magnificationLens)](https://github.com/behradesg/LIGGGHTS-magnificationLens) should already be compiled in your system. Then, download the solver or clone it using git clone. Change the cloned folder name to pfmFOAM. Load CFDEMcoupling_ML bashrc in a terminal and in the same terminal type
 ```bash
 cd pfmFOAM/pfm/src/TurbulenceModels
 ./Allwmake
